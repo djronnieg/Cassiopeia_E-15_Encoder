@@ -141,15 +141,19 @@ class VideoEncoderApp(QtWidgets.QWidget):
             if not run:
                 continue
 
-            # Determine the suffix based on the preset
+            # Determine suffixes for preset and downscale filter
             preset_suffix = ""
+            filter_suffix = ""
+
             if preset == "No B-Frames":
                 preset_suffix = "_nobf"
             elif preset == "Tweaked":
                 preset_suffix = "_tweaked"
 
-            # Construct the output file name with the preset suffix
-            output_file = f"{output_dir}/{resolution}/{os.path.basename(input_path).replace('.mkv', f'-{resolution}-{fps}fps{preset_suffix}.avi')}"
+            if downscale in ["Lanczos", "Spline36"]:
+                filter_suffix = f"_{downscale.lower()}"
+
+            output_file = f"{output_dir}/{resolution}/{os.path.basename(input_path).replace('.mkv', f'-{resolution}-{fps}fps{preset_suffix}{filter_suffix}.avi')}"
             os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
             command_templates = {
