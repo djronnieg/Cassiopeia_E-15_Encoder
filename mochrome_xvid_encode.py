@@ -50,6 +50,9 @@ class VideoEncoderApp(QtWidgets.QWidget):
         self.preset = QtWidgets.QComboBox(self)
         self.preset.addItems(['None', 'No B-Frames', 'Tweaked'])
         
+        self.sample_rate = QtWidgets.QComboBox(self)
+        self.sample_rate.addItems(['8000', '16000', '24000', '32000', '44100'])
+        
         self.run_checkbox = QtWidgets.QCheckBox('Run', self)
         
         add_button = QtWidgets.QPushButton('Add Job', self)
@@ -62,6 +65,7 @@ class VideoEncoderApp(QtWidgets.QWidget):
         job_controls.addWidget(self.fps_input)
         job_controls.addWidget(self.downscale_filter)
         job_controls.addWidget(self.preset)
+        job_controls.addWidget(self.sample_rate)
         job_controls.addWidget(self.run_checkbox)
         job_controls.addWidget(add_button)
         job_controls.addWidget(remove_button)
@@ -93,7 +97,7 @@ class VideoEncoderApp(QtWidgets.QWidget):
         file_path, _ = QFileDialog.getOpenFileName(self, 'Select Input File')
         if file_path:
             self.input_path.setText(file_path)
-            self.update_resolutions((640, 480))  # Placeholder for aspect-ratio-based resolution handling.
+            self.update_resolutions((640, 480))
 
     def select_output(self):
         folder_path = QFileDialog.getExistingDirectory(self, 'Select Output Directory')
@@ -113,11 +117,12 @@ class VideoEncoderApp(QtWidgets.QWidget):
         fps = self.fps_input.value()
         downscale = self.downscale_filter.currentText()
         preset = self.preset.currentText()
+        sample_rate = self.sample_rate.currentText()
         run = self.run_checkbox.isChecked()
         
-        job_text = f"{resolution} | {fps} FPS | {downscale} | {preset} | {'Run' if run else 'Skip'}"
+        job_text = f"{resolution} | {fps} FPS | {downscale} | {preset} | {sample_rate} Hz | {'Run' if run else 'Skip'}"
         self.job_list.addItem(job_text)
-        self.jobs.append((resolution, fps, downscale, preset, run))
+        self.jobs.append((resolution, fps, downscale, preset, sample_rate, run))
 
     def remove_selected_job(self):
         selected = self.job_list.currentRow()
@@ -137,48 +142,20 @@ class VideoEncoderApp(QtWidgets.QWidget):
             self.status_log.append('Error: Input and output paths must be set.')
             return
 
-        for resolution, fps, downscale, preset, run in self.jobs:
+        for resolution, fps, downscale, preset, sample_rate, run in self.jobs:
             if not run:
                 continue
 
-            # Determine suffixes for preset and downscale filter
-            preset_suffix = ""
-            filter_suffix = ""
+            preset_suffix = f"_{preset.lower().replace(' ', '')}" if preset != "None" else ""
+            filter_suffix = f"_{downscale.lower()}" if downscale != "None" else ""
+            sample_rate_suffix = f"_{int(sample_rate) // 1000}khz"
 
-            if preset == "No B-Frames":
-                preset_suffix = "_nobf"
-            elif preset == "Tweaked":
-                preset_suffix = "_tweaked"
-
-            if downscale in ["Lanczos", "Spline36"]:
-                filter_suffix = f"_{downscale.lower()}"
-
-            output_file = f"{output_dir}/{resolution}/{os.path.basename(input_path).replace('.mkv', f'-{resolution}-{fps}fps{preset_suffix}{filter_suffix}.avi')}"
+            output_file = f"{output_dir}/{resolution}/{os.path.basename(input_path).replace('.mkv', f'-{resolution}-{fps}fps{preset_suffix}{filter_suffix}{sample_rate_suffix}.avi')}"
             os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
-            command_templates = {
-                "None": (
-                    'ffmpeg -i "{input_file}" -vf "scale={resolution}:flags={filter},fps={fps},format=gray,lut=y=\'(val/16)*16\'" '
-                    '-c:v libxvid -q:v 3 -c:a adpcm_ima_wav -ar 8000 -ac 1 "{output_file}"'
-                ),
-                "No B-Frames": (
-                    'ffmpeg -i "{input_file}" -vf "scale={resolution}:flags={filter},fps={fps},format=gray,lut=y=\'(val/16)*16\'" '
-                    '-c:v libxvid -q:v 3 -bf 0 -c:a adpcm_ima_wav -ar 8000 -ac 1 "{output_file}"'
-                ),
-                "Tweaked": (
-                    'ffmpeg -i "{input_file}" -vf "scale={resolution}:flags={filter},fps={fps},format=gray,lut=y=\'(val/16)*16\'" '
-                    '-c:v libxvid -qscale:v 5 -bf 0 -g 10 '
-                    '-maxrate 200k -bufsize 100k '
-                    '-c:a adpcm_ima_wav -ar 8000 -ac 1 "{output_file}"'
-                )
-            }
-
-            ffmpeg_command = command_templates[preset].format(
-                input_file=input_path,
-                resolution=resolution,
-                filter=downscale.lower(),
-                fps=fps,
-                output_file=output_file
+            ffmpeg_command = (
+                f'ffmpeg -i "{input_path}" -vf "scale={resolution}:flags={downscale.lower()},fps={fps},format=gray,lut=y=\'(val/16)*16\'" '
+                f'-c:v libxvid -q:v 3 -bf 0 -c:a adpcm_ima_wav -ar {sample_rate} -ac 1 "{output_file}"'
             )
 
             self.status_log.append(f"Running: {ffmpeg_command}")
