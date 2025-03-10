@@ -153,8 +153,11 @@ class VideoEncoderApp(QtWidgets.QWidget):
             output_file = f"{output_dir}/{resolution}/{os.path.basename(input_path).replace('.mkv', f'-{resolution}-{fps}fps{preset_suffix}{filter_suffix}{sample_rate_suffix}.avi')}"
             os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
+            # Use the correct filter option for Spline36
+            scale_filter = f"scale={resolution}:flags={downscale.lower() if downscale != 'Spline36' else 'spline'}"
+
             ffmpeg_command = (
-                f'ffmpeg -i "{input_path}" -vf "scale={resolution}:flags={downscale.lower()},fps={fps},format=gray,lut=y=\'(val/16)*16\'" '
+                f'ffmpeg -i "{input_path}" -vf "{scale_filter},fps={fps},format=gray,lut=y=\'(val/16)*16\'" '
                 f'-c:v libxvid -q:v 3 -bf 0 -c:a adpcm_ima_wav -ar {sample_rate} -ac 1 "{output_file}"'
             )
 
